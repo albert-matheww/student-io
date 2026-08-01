@@ -1,0 +1,39 @@
+name: student-io
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: student-io-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: student_io
+      POSTGRES_PASSWORD: student_io_dev
+      POSTGRES_DB: student_io
+    ports:
+      - "5442:5432"
+    volumes:
+      - student_io_pg_data:/var/lib/postgresql/data
+      - ./infra/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student_io -d student_io"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: student-io-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - student_io_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  student_io_pg_data:
+  student_io_redis_data:
