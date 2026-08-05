@@ -66,6 +66,7 @@ cd apps/api
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in real keys — see below
+alembic upgrade head    # create/update the schema (Alembic owns it — no create_all)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -116,6 +117,7 @@ apps/
     app/routers/         onboarding, courses, lessons, revision, flashcards, search, gamification
     app/services/        syllabus/lesson generation, AI pipeline, confidence scoring,
                           spaced repetition, exam planning, gamification (OpenAI-backed)
+    alembic/             migrations (initial schema) — run via `alembic upgrade head`
 docker-compose.yml       Postgres (pgvector) + Redis
 ```
 
@@ -123,8 +125,10 @@ docker-compose.yml       Postgres (pgvector) + Redis
 
 - **Frontend** — Vercel project `student-io`, deployed from `apps/web`. Live at
   https://student-io-kohl.vercel.app. `NEXT_PUBLIC_API_URL` points at the Railway API.
-- **Backend** — Railway project `student-io`, service `api`, built from
-  `apps/api/Dockerfile`. Live at `https://api-production-dc0b.up.railway.app`.
+- **Backend** — Railway project `student-io`, service `api`, built from the GitHub repo
+  `albert-matheww/student-io` (root `apps/api`, Dockerfile build). Push-to-deploy is
+  enabled on branch `main` — every push rebuilds and redeploys. Live at
+  `https://api-production-dc0b.up.railway.app`.
 - **Database** — Railway service `postgres`, image `pgvector/pgvector:pg16`, reached by
   the API over Railway's private network (`postgres.railway.internal`) — never exposed
   publicly.
@@ -133,29 +137,20 @@ docker-compose.yml       Postgres (pgvector) + Redis
   - **PGDATA** — must stay `/var/lib/postgresql/data/pgdata` (set as a service
     variable): the official Postgres image refuses to `initdb` directly into a mount
     point (the volume's `lost+found` makes it "not empty"). Do not remove this.
-  - **Schema** — was recreated after the volume attach (a fresh volume starts empty).
-    `CREATE EXTENSION IF NOT EXISTS vector` was run manually, then
-    `Base.metadata.create_all()` was executed by temporarily flipping the api's
-    `ENVIRONMENT` to `development` (which enables the dev-only auto-create in
-    `app/main.py`) and flipping it back. See the migration note below — this stays a
-    manual step until Alembic is wired.
+  - **Schema** — owned by Alembic migrations (`apps/api/alembic/`). On Railway the api
+    service runs `alembic upgrade head` before uvicorn on every deploy, so schema
+    changes ship automatically; locally run it once after `docker compose up -d`. The
+    existing production DB was stamped at the initial migration revision.
 
 Known follow-ups from this deploy:
-- **No migration tool wired to production** — schema changes need the same manual
-  `create_all` (or `CREATE EXTENSION`) dance as above, or real Alembic migrations,
-  until that's set up.
-- **Repo isn't connected to Railway** — the `api` service was uploaded from the local
-  `apps/api` dir (no GitHub repo, no git history in this folder yet). Put this under
-  git and link it (or use `railway up`) to unlock push-to-deploy and a declarative
-  `railway.toml`.
-- **No real API keys configured on Railway** — `OPENAI_API_KEY`, `CLERK_*`,
-  `SUPABASE_*`, `YOUTUBE_API_KEY` are all unset on the deployed API, same as local dev.
-  The live link works fully but shows the same honest placeholders described above.
-  Add them as Railway variables on the `api` service to light up the real integrations.
+- **API keys still on Railway variables** — `OPENAI_API_KEY` is set; `CLERK_*`,
+  `SUPABASE_*`, and `YOUTUBE_API_KEY` are not (add them with
+  `scripts/push-api-keys.sh`). The live link works but shows honest placeholders until
+  then.
 
 ## Not yet built
 
 A richer multi-node knowledge graph (today it's prerequisite chain + same-module
-"related concepts," not a full DAG with confused-concept clustering), a real job queue
-for the AI pipeline (currently a FastAPI background task, fine for demo load), and
-Alembic-managed migrations are the natural next steps beyond this.
+"related concepts," not a full DAG with confused-concept clustering), and a real job
+queue for the AI pipeline (currently a FastAPI background task, fine for demo load)
+are the natural next steps beyond this.

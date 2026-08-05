@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.database import Base, engine
 from app.routers import courses, flashcards, gamification, lessons, onboarding, revision, search
 
 settings = get_settings()
@@ -24,14 +23,6 @@ app.include_router(revision.router)
 app.include_router(flashcards.router)
 app.include_router(search.router)
 app.include_router(gamification.router)
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    # Dev convenience only — Alembic migrations (apps/api/alembic/) own the
-    # schema once this ships beyond local development.
-    if settings.environment == "development":
-        Base.metadata.create_all(bind=engine)
 
 
 @app.get("/health")
