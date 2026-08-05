@@ -1,5 +1,11 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+declare global {
+  interface Window {
+    Clerk?: { session?: { getToken(): Promise<string | null> } };
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -14,12 +20,16 @@ interface RequestOptions extends RequestInit {
 }
 
 /**
- * Thin fetch wrapper for the FastAPI backend. Once Clerk is configured, swap
- * `devUserId` for a real session token (see apps/api/app/core/auth.py) —
- * until then the API accepts an X-Dev-User-Id header for local development.
+ * Thin fetch wrapper for the FastAPI backend. When Clerk is configured (see
+ * apps/api/app/core/auth.py), the backend requires a real session token, so
+ * this attaches one from the imperative `window.Clerk` client — there's no
+ * hook context available here since `request` is a plain function shared
+ * across components. Falls back to X-Dev-User-Id when Clerk isn't loaded,
+ * for local development without a Clerk account.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { devUserId = "dev-user-1", headers, ...rest } = options;
+  const token = await window.Clerk?.session?.getToken();
 
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
@@ -27,7 +37,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       ...(rest.body && !(rest.body instanceof FormData)
         ? { "Content-Type": "application/json" }
         : {}),
-      "X-Dev-User-Id": devUserId,
+      ...(token ? { Authorization: `Bearer ${token}` } : { "X-Dev-User-Id": devUserId }),
       ...headers,
     },
   });
