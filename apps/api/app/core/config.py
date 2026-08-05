@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # AI — Gemini is preferred (free tier) and falls back to OpenAI when
     # GEMINI_API_KEY is unset.
     gemini_api_key: str | None = None
-    gemini_chat_model: str = "gemini-2.5-flash"
+    gemini_chat_model: str = "gemini-3.6-flash"
     gemini_embedding_model: str = "gemini-embedding-001"
 
     openai_api_key: str | None = None

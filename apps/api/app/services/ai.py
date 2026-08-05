@@ -21,12 +21,16 @@ def active_provider() -> str | None:
     return None
 
 
+@lru_cache
 def _gemini_client():
+    """Module-level singleton — google-genai 2.x closes the underlying httpx
+    transport when a short-lived Client is garbage collected mid-call."""
     from google import genai
 
     return genai.Client(api_key=settings.gemini_api_key)
 
 
+@lru_cache
 def _openai_client():
     from openai import OpenAI
 
