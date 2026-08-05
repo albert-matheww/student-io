@@ -145,8 +145,15 @@ docker-compose.yml       Postgres (pgvector) + Redis
 
 Known follow-ups from this deploy:
 - **All API keys are deployed** — `CLERK_*`, `SUPABASE_*`, `YOUTUBE_API_KEY`, and
-  `GEMINI_*` live on Railway (via `scripts/push-api-keys.sh`). `OPENAI_API_KEY` is
-  still set but dormant (Gemini takes precedence; safe to delete).
+  `GEMINI_*` live on Railway (via `scripts/push-api-keys.sh`). `OPENAI_API_KEY` has
+  been removed from both Railway and `apps/api/.env` since Gemini always takes
+  precedence when its key is present, making the OpenAI code paths unreachable dead
+  weight; re-add it if Gemini is ever intentionally disabled.
+- **The web API client now sends real Clerk session tokens.** Once Clerk was wired up
+  end-to-end, `apps/web/src/lib/api.ts` was still only sending the local-dev
+  `X-Dev-User-Id` fallback header, so every authenticated request 401'd in production
+  while the UI showed a stale "check localhost:8000" toast. Fixed by attaching
+  `window.Clerk.session.getToken()` as a Bearer token when Clerk is loaded.
 
 ## Not yet built
 
