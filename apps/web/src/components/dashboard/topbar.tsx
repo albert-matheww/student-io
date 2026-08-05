@@ -1,12 +1,15 @@
 "use client";
 
 import { Flame, Bell } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { api, type DashboardStats } from "@/lib/api";
+
+const HAS_CLERK = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
 export function Topbar() {
   const params = useParams<{ courseId?: string }>();
@@ -30,11 +33,15 @@ export function Topbar() {
           <Bell className="size-4" />
         </Button>
         <ThemeToggle />
-        <Avatar className="size-8">
-          <AvatarFallback className="bg-brand-indigo text-primary-foreground text-xs font-semibold">
-            ST
-          </AvatarFallback>
-        </Avatar>
+        {HAS_CLERK ? (
+          <UserButton signInUrl="/sign-in" />
+        ) : (
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-brand-indigo text-primary-foreground text-xs font-semibold">
+              ST
+            </AvatarFallback>
+          </Avatar>
+        )}
       </div>
     </header>
   );

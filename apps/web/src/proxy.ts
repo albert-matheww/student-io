@@ -14,5 +14,10 @@ export default HAS_CLERK
   : () => NextResponse.next();
 
 export const config = {
-  matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)"],
+  matcher: [
+    "/((?!_next|.*\\..*).*)",
+    // Always run for Clerk's auto-proxy path
+    "/__clerk/:path*",
+    "/(api|trpc)(.*)",
+  ],
 };

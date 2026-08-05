@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { GradientMesh } from "@/components/brand/gradient-mesh";
 import { OAuthButtons } from "@/components/onboarding/oauth-buttons";
+import { AccountButtons } from "@/components/auth/account-buttons";
 import { HeroPreviewCard } from "@/components/marketing/hero-preview-card";
 import { fadeUp, staggerContainer } from "@/lib/motion";
 
@@ -18,15 +19,7 @@ export default function WelcomePage() {
       <header className="relative z-10 flex items-center justify-between px-6 py-6 sm:px-10">
         <Logo />
         <nav className="flex items-center gap-2">
-          <Button variant="ghost" asChild>
-            <Link href="/sign-in">Log in</Link>
-          </Button>
-          <Button asChild className="shadow-soft">
-            <Link href="/onboarding/profile">
-              Get Started
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
+          <AccountButtons />
         </nav>
       </header>
 
