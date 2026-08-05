@@ -4,24 +4,18 @@ Runs as a FastAPI background task immediately after a resource is uploaded,
 moving `Resource.status` through uploaded -> processing -> processed/failed.
 """
 
-import base64
 import io
-
-from openai import OpenAI
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models import Resource, ResourceChunk, ResourceStatus, ResourceType
+from app.services import ai
 from app.services.storage import read_resource_file
 
 settings = get_settings()
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
-
-
-def _client() -> OpenAI | None:
-    return OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
 
 
 def process_resource(resource_id: str) -> None:
@@ -58,15 +52,20 @@ def process_resource(resource_id: str) -> None:
 
         resource.processing_stage = "embedding"
         db.commit()
-        client = _client()
-        for index, chunk in enumerate(chunks):
-            embedding = None
-            if client is not None:
-                response = client.embeddings.create(model=settings.openai_embedding_model, input=chunk)
-                embedding = response.data[0].embedding
-            db.add(
-                ResourceChunk(resource_id=resource.id, content=chunk, chunk_index=index, embedding=embedding)
-            )
+        try:
+            chunks_with_embeddings = []
+            for index, chunk in enumerate(chunks):
+                embedding = ai.embed_text(chunk) if ai.active_provider() else None
+                chunks_with_embeddings.append(
+                    ResourceChunk(resource_id=resource.id, content=chunk, chunk_index=index, embedding=embedding)
+                )
+        except Exception as exc:  # noqa: BLE001
+            resource.status = ResourceStatus.failed
+            resource.error_message = str(exc)[:500]
+            db.commit()
+            return
+        for chunk_row in chunks_with_embeddings:
+            db.add(chunk_row)
 
         resource.status = ResourceStatus.processed
         resource.processing_stage = "done"
@@ -118,41 +117,16 @@ def _extract_pptx(content: bytes) -> str:
 
 
 def _transcribe_image(content: bytes, filename: str) -> str:
-    """OCR + diagram description via a vision-capable chat model."""
-    client = _client()
-    if client is None:
+    """OCR + diagram description via a vision-capable model."""
+    if not ai.active_provider():
         return ""
-    b64 = base64.b64encode(content).decode()
-    ext = filename.rsplit(".", 1)[-1].lower()
-    mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
-    response = client.chat.completions.create(
-        model=settings.openai_chat_model,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Transcribe all text and describe any diagrams in this image, for use as lecture notes.",
-                    },
-                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                ],
-            }
-        ],
-    )
-    return response.choices[0].message.content or ""
+    return ai.transcribe_image(content, filename)
 
 
 def _transcribe_audio(content: bytes, filename: str) -> str:
-    client = _client()
-    if client is None:
+    if not ai.active_provider():
         return ""
-    buffer = io.BytesIO(content)
-    buffer.name = filename
-    transcript = client.audio.transcriptions.create(
-        model=settings.openai_transcription_model, file=buffer
-    )
-    return transcript.text
+    return ai.transcribe_audio(content, filename)
 
 
 def _chunk_text(text: str) -> list[str]:

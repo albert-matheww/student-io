@@ -6,12 +6,15 @@ boto3==1.43.64
 botocore==1.43.64
 certifi==2026.7.22
 cffi==2.1.1
+charset-normalizer==3.4.9
 click==8.4.2
 cryptography==50.0.0
 deprecation==2.1.0
 distro==1.9.0
 ecdsa==0.19.2
 fastapi==0.141.1
+google-auth==2.56.2
+google-genai==2.16.0
 h11==0.16.0
 h2==4.4.1
 hpack==4.2.0
@@ -35,6 +38,7 @@ propcache==0.5.2
 psycopg==3.3.4
 psycopg-binary==3.3.4
 pyasn1==0.6.4
+pyasn1-modules==0.4.2
 pycparser==3.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
@@ -50,6 +54,7 @@ python-pptx==1.0.2
 PyYAML==6.0.3
 realtime==2.31.0
 redis==8.1.0
+requests==2.34.2
 rsa==4.9.1
 s3transfer==0.19.2
 six==1.17.0
@@ -61,6 +66,7 @@ StrEnum==0.4.15
 supabase==2.31.0
 supabase-auth==2.31.0
 supabase-functions==2.31.0
+tenacity==9.1.4
 tqdm==4.70.0
 typing-inspection==0.4.2
 typing_extensions==4.16.0

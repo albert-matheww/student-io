@@ -92,7 +92,8 @@ To make it real, add these to `apps/api/.env` / `apps/web/.env.local`:
 
 | Variable | Where to get it | Unlocks |
 |---|---|---|
-| `OPENAI_API_KEY` | platform.openai.com/api-keys | Real syllabus parsing, lesson notes, flashcards, quizzes, AI tutor answers, OCR, Whisper transcription, embeddings |
+| `GEMINI_API_KEY` | aistudio.google.com/apikey | Real syllabus parsing, lesson notes, flashcards, quizzes, AI tutor answers, OCR, transcription, embeddings (free tier; recommended) |
+| `OPENAI_API_KEY` | platform.openai.com/api-keys | Same features, used only when `GEMINI_API_KEY` is unset |
 | `CLERK_ISSUER` / `CLERK_SECRET_KEY` (api)<br>`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (web) | dashboard.clerk.com | Real Google/Apple/Microsoft sign-in, session-protected routes |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | app.supabase.com | Uploaded files go to cloud storage instead of `apps/api/uploads/` |
 | `YOUTUBE_API_KEY` | console.cloud.google.com | Video recommendations on lesson pages |

@@ -1,15 +1,13 @@
 """Syllabus understanding — turns raw syllabus text into a structured course
-outline (modules → lessons) using the OpenAI API.
+outline (modules → lessons) using the AI provider.
 
-Falls back to a single-module placeholder outline when OPENAI_API_KEY isn't
-configured, so onboarding still completes end-to-end during local dev.
+Falls back to a single-module placeholder outline when no provider is
+configured (or fails), so onboarding still completes end-to-end during local
+dev.
 """
 
-import json
-
-from openai import OpenAI
-
 from app.core.config import get_settings
+from app.services import ai
 
 settings = get_settings()
 
@@ -23,21 +21,18 @@ lessons the way they should be studied."""
 
 
 def generate_course_outline(course_name: str, raw_text: str | None) -> dict:
-    if not settings.openai_api_key:
+    if not ai.active_provider():
         return _placeholder_outline(course_name)
 
-    client = OpenAI(api_key=settings.openai_api_key)
     user_content = raw_text or f"Generate a standard syllabus outline for: {course_name}"
-
-    response = client.chat.completions.create(
-        model=settings.openai_chat_model,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": f"Course: {course_name}\n\nSyllabus:\n{user_content}"},
-        ],
-    )
-    return json.loads(response.choices[0].message.content)
+    try:
+        outline = ai.chat_json(
+            _SYSTEM_PROMPT,
+            f"Course: {course_name}\n\nSyllabus:\n{user_content}",
+        )
+        return outline if outline.get("modules") else _placeholder_outline(course_name)
+    except Exception:  # noqa: BLE001 — provider hiccups degrade to the placeholder, not a 500
+        return _placeholder_outline(course_name)
 
 
 def _placeholder_outline(course_name: str) -> dict:

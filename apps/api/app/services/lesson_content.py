@@ -1,14 +1,12 @@
 """Generates the actual teaching content for a lesson: structured notes,
 flashcards, and quiz questions — the "AI Notes" and "AI Teacher" pieces of
-the product. Uses OpenAI when configured; otherwise returns clearly-labeled
-placeholder content so the lesson page is fully explorable in local dev.
+the product. Uses the configured AI provider (Gemini by default); otherwise
+returns clearly-labeled placeholder content so the lesson page is fully
+explorable in local dev.
 """
 
-import json
-
-from openai import OpenAI
-
 from app.core.config import get_settings
+from app.services import ai
 
 settings = get_settings()
 
@@ -35,56 +33,42 @@ _QUIZ_SYSTEM_PROMPT = """Generate 5 quiz questions for this lesson, mixing types
 "options": [str] | null, "correct_answer": str, "explanation": str, "difficulty": "easy"|"medium"|"hard"}]}"""
 
 
-def _client() -> OpenAI | None:
-    return OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-
-
 def generate_lesson_notes(lesson_title: str, course_name: str) -> dict:
-    client = _client()
-    if client is None:
+    if not ai.active_provider():
         return _placeholder_notes(lesson_title)
-
-    response = client.chat.completions.create(
-        model=settings.openai_chat_model,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _NOTES_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Course: {course_name}\nLesson: {lesson_title}"},
-        ],
-    )
-    return json.loads(response.choices[0].message.content)
+    try:
+        return ai.chat_json(
+            _NOTES_SYSTEM_PROMPT,
+            f"Course: {course_name}\nLesson: {lesson_title}",
+        )
+    except Exception:  # noqa: BLE001 — provider hiccups degrade to the placeholder
+        return _placeholder_notes(lesson_title)
 
 
 def generate_flashcards(lesson_title: str, course_name: str) -> list[dict]:
-    client = _client()
-    if client is None:
+    if not ai.active_provider():
         return _placeholder_flashcards(lesson_title)
-
-    response = client.chat.completions.create(
-        model=settings.openai_chat_model,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _FLASHCARD_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Course: {course_name}\nLesson: {lesson_title}"},
-        ],
-    )
-    return json.loads(response.choices[0].message.content)["flashcards"]
+    try:
+        result = ai.chat_json(
+            _FLASHCARD_SYSTEM_PROMPT,
+            f"Course: {course_name}\nLesson: {lesson_title}",
+        )
+        return result.get("flashcards") or _placeholder_flashcards(lesson_title)
+    except Exception:  # noqa: BLE001
+        return _placeholder_flashcards(lesson_title)
 
 
 def generate_quiz_questions(lesson_title: str, course_name: str) -> list[dict]:
-    client = _client()
-    if client is None:
+    if not ai.active_provider():
         return _placeholder_quiz(lesson_title)
-
-    response = client.chat.completions.create(
-        model=settings.openai_chat_model,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": _QUIZ_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Course: {course_name}\nLesson: {lesson_title}"},
-        ],
-    )
-    return json.loads(response.choices[0].message.content)["questions"]
+    try:
+        result = ai.chat_json(
+            _QUIZ_SYSTEM_PROMPT,
+            f"Course: {course_name}\nLesson: {lesson_title}",
+        )
+        return result.get("questions") or _placeholder_quiz(lesson_title)
+    except Exception:  # noqa: BLE001
+        return _placeholder_quiz(lesson_title)
 
 
 def answer_tutor_question(
@@ -99,11 +83,10 @@ def answer_tutor_question(
     memory); `student_context` summarizes what the AI already knows about
     this student — weak topics, mastered topics, learning style — so answers
     adapt instead of repeating a generic explanation every time."""
-    client = _client()
-    if client is None:
+    if not ai.active_provider():
         return (
             f"I'd explain \"{lesson_title}\" simply, with an analogy and a worked example here — "
-            "connect an OPENAI_API_KEY in apps/api/.env to enable live AI tutoring."
+            "connect an AI provider key in apps/api/.env to enable live AI tutoring."
         )
 
     system_prompt = (
@@ -120,8 +103,8 @@ def answer_tutor_question(
         messages.append({"role": turn["role"], "content": turn["content"]})
     messages.append({"role": "user", "content": question})
 
-    response = client.chat.completions.create(model=settings.openai_chat_model, messages=messages)
-    return response.choices[0].message.content
+    conversation = messages[1:]
+    return ai.chat(messages[0]["content"], conversation)
 
 
 def _placeholder_notes(lesson_title: str) -> dict:
@@ -129,7 +112,7 @@ def _placeholder_notes(lesson_title: str) -> dict:
         "overview": f"This lesson covers the core ideas behind {lesson_title}, building the foundation "
         "you'll need for everything that follows in this module.",
         "blocks": [
-            {"type": "definition", "term": lesson_title, "text": "Connect OPENAI_API_KEY to generate real, sourced notes for this topic."},
+            {"type": "definition", "term": lesson_title, "text": "Connect an AI provider key to generate real, sourced notes for this topic."},
             {
                 "type": "callout",
                 "variant": "tip",
@@ -149,8 +132,8 @@ def _placeholder_notes(lesson_title: str) -> dict:
 
 def _placeholder_flashcards(lesson_title: str) -> list[dict]:
     return [
-        {"card_type": "basic", "front": f"What is {lesson_title}?", "back": "Connect an OpenAI API key to generate a real answer."},
-        {"card_type": "basic", "front": f"Why does {lesson_title} matter?", "back": "Connect an OpenAI API key to generate a real answer."},
+        {"card_type": "basic", "front": f"What is {lesson_title}?", "back": "Connect an AI provider key to generate a real answer."},
+        {"card_type": "basic", "front": f"Why does {lesson_title} matter?", "back": "Connect an AI provider key to generate a real answer."},
     ]
 
 
@@ -158,7 +141,7 @@ def _placeholder_quiz(lesson_title: str) -> list[dict]:
     return [
         {
             "question_type": "mcq",
-            "prompt": f"Which best describes {lesson_title}? (placeholder — connect OPENAI_API_KEY for real questions)",
+            "prompt": f"Which best describes {lesson_title}? (placeholder — connect an AI provider key for real questions)",
             "options": ["Option A", "Option B", "Option C", "Option D"],
             "correct_answer": "Option A",
             "explanation": "Placeholder explanation.",

@@ -19,7 +19,12 @@ class Settings(BaseSettings):
     clerk_issuer: str | None = None
     clerk_secret_key: str | None = None
 
-    # AI
+    # AI — Gemini is preferred (free tier) and falls back to OpenAI when
+    # GEMINI_API_KEY is unset.
+    gemini_api_key: str | None = None
+    gemini_chat_model: str = "gemini-2.5-flash"
+    gemini_embedding_model: str = "gemini-embedding-001"
+
     openai_api_key: str | None = None
     openai_chat_model: str = "gpt-4.1"
     openai_embedding_model: str = "text-embedding-3-large"
