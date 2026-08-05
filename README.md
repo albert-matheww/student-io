@@ -45,7 +45,7 @@ auth, and cloud file storage — each has a working local-dev fallback, describe
 | Database | PostgreSQL + pgvector (semantic search / embeddings) |
 | Cache/Queue | Redis |
 | Auth | Clerk (Google / Apple / Microsoft OAuth) |
-| AI | OpenAI (course/lesson generation, OCR, Whisper transcription, embeddings, tutor chat) |
+| AI | Gemini (course/lesson generation, OCR, transcription, embeddings, tutor chat) |
 | Storage | Supabase Storage (falls back to local disk in dev) |
 
 ## Getting started
@@ -117,7 +117,7 @@ apps/
     app/models.py        SQLAlchemy models
     app/routers/         onboarding, courses, lessons, revision, flashcards, search, gamification
     app/services/        syllabus/lesson generation, AI pipeline, confidence scoring,
-                          spaced repetition, exam planning, gamification (OpenAI-backed)
+                          spaced repetition, exam planning, gamification (AI-backed)
     alembic/             migrations (initial schema) — run via `alembic upgrade head`
 docker-compose.yml       Postgres (pgvector) + Redis
 ```
@@ -144,10 +144,9 @@ docker-compose.yml       Postgres (pgvector) + Redis
     existing production DB was stamped at the initial migration revision.
 
 Known follow-ups from this deploy:
-- **API keys still on Railway variables** — `OPENAI_API_KEY` is set; `CLERK_*`,
-  `SUPABASE_*`, and `YOUTUBE_API_KEY` are not (add them with
-  `scripts/push-api-keys.sh`). The live link works but shows honest placeholders until
-  then.
+- **All API keys are deployed** — `CLERK_*`, `SUPABASE_*`, `YOUTUBE_API_KEY`, and
+  `GEMINI_*` live on Railway (via `scripts/push-api-keys.sh`). `OPENAI_API_KEY` is
+  still set but dormant (Gemini takes precedence; safe to delete).
 
 ## Not yet built
 
