@@ -9,3 +9,5 @@ if (dsn) {
     tracesSampleRate: 0.1,
   });
 }
+
+export const onRouterTransitionStart = dsn ? Sentry.captureRouterTransitionStart : undefined;
