@@ -42,7 +42,7 @@ KEYS=(
 export PATH="/opt/homebrew/bin:$PATH"
 
 for key in "${KEYS[@]}"; do
-  raw="$(grep -E "^${key}=" "$ENV_FILE" | head -n 1 | cut -d= -f2-)"
+  raw="$(grep -E "^${key}=" "$ENV_FILE" | head -n 1 | cut -d= -f2- || true)"
   raw="${raw%$'\r'}"
   value="${raw#\"}"; value="${value%\"}"
   if [ -z "$value" ]; then

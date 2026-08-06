@@ -194,6 +194,15 @@ docker-compose.yml       Postgres (pgvector) + Redis
     service runs `alembic upgrade head` before uvicorn on every deploy, so schema
     changes ship automatically; locally run it once after `docker compose up -d`. The
     existing production DB was stamped at the initial migration revision.
+- **Redis** — Railway service `Redis` (first-party plugin, not a custom image), reached
+  the same way as Postgres — over the private network (`redis.railway.internal`), never
+  exposed publicly. Backs both the rate limiter and the job queue. This was provisioned
+  after the rate-limiting/queue code was already deployed and briefly meant every
+  rate-limited endpoint (course generation, uploads, lesson content, the tutor) would
+  have failed against a nonexistent `localhost:6379` the moment anyone hit them — caught
+  and fixed before any real traffic did. There is a second, empty Redis instance
+  (`Redis-XRE6`) left over from a duplicate `railway add` caused by that CLI command's
+  silent-on-success output; harmless but unused, safe to delete from the dashboard.
 
 Known follow-ups from this deploy:
 - **All API keys are deployed** — `CLERK_*`, `SUPABASE_*`, `YOUTUBE_API_KEY`, and
