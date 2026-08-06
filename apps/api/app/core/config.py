@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     gemini_chat_model: str = "gemini-3.6-flash"
     gemini_embedding_model: str = "gemini-embedding-001"
 
+    # Groq — free tier, OpenAI-compatible API. Used as a second fallback for
+    # chat and transcription only (Groq has no embeddings or vision models),
+    # ahead of paid OpenAI, when GEMINI_API_KEY is unset.
+    groq_api_key: str | None = None
+    groq_chat_model: str = "llama-3.3-70b-versatile"
+    groq_transcription_model: str = "whisper-large-v3"
+
     openai_api_key: str | None = None
     openai_chat_model: str = "gpt-4.1"
     openai_embedding_model: str = "text-embedding-3-large"
@@ -37,6 +44,9 @@ class Settings(BaseSettings):
 
     # YouTube recommendations
     youtube_api_key: str | None = None
+
+    # Error monitoring — https://sentry.io, free tier. No-op when unset.
+    sentry_dsn: str | None = None
 
     cors_origins: list[str] = ["http://localhost:3000"]
 

@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.core.limiter import limiter
 from app.models import (
     ConfidenceScore,
     Course,
@@ -59,7 +60,9 @@ def _get_owned_lesson_by_slug(course_id: str, slug: str, db: Session, user: User
 
 
 @router.get("/courses/{course_id}/lessons/{slug}", response_model=LessonDetailOut)
+@limiter.limit("30/minute")
 def get_lesson(
+    request: Request,
     course_id: str,
     slug: str,
     db: Session = Depends(get_db),
@@ -263,7 +266,9 @@ def _build_student_context(db: Session, user: User) -> str | None:
 
 
 @router.post("/lessons/{lesson_id}/ask", response_model=TutorAskOut)
+@limiter.limit("20/minute")
 def ask_tutor(
+    request: Request,
     lesson_id: str,
     payload: TutorAskIn,
     db: Session = Depends(get_db),

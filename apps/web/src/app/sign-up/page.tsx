@@ -16,6 +16,7 @@ export default function SignUpPage() {
         <Logo />
         {HAS_CLERK ? (
           <SignUp
+            routing="hash"
             fallbackRedirectUrl="/onboarding/profile"
             appearance={{ variables: { colorPrimary: "oklch(0.62 0.19 259)" } }}
             signInUrl="/sign-in"

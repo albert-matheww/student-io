@@ -1,4 +1,5 @@
-"""AI provider abstraction — Gemini (free tier) preferred, OpenAI as fallback.
+"""AI provider abstraction — Gemini (free tier) preferred, then Groq (free
+tier, chat + transcription only), then OpenAI (paid) as the last resort.
 
 Everything returns None when no provider is configured so the rest of the
 stack keeps its local-dev placeholder behaviour.
@@ -21,6 +22,18 @@ def active_provider() -> str | None:
     return None
 
 
+def chat_provider() -> str | None:
+    """Chat/transcription have a Groq option; embeddings and vision don't
+    (Groq serves neither), so those two stay on `active_provider()`."""
+    if settings.gemini_api_key:
+        return "gemini"
+    if settings.groq_api_key:
+        return "groq"
+    if settings.openai_api_key:
+        return "openai"
+    return None
+
+
 @lru_cache
 def _gemini_client():
     """Module-level singleton — google-genai 2.x closes the underlying httpx
@@ -37,10 +50,20 @@ def _openai_client():
     return OpenAI(api_key=settings.openai_api_key)
 
 
+@lru_cache
+def _groq_client():
+    """Groq's API is OpenAI-compatible, so the same SDK works pointed at
+    Groq's base URL — no extra dependency needed."""
+    from openai import OpenAI
+
+    return OpenAI(api_key=settings.groq_api_key, base_url="https://api.groq.com/openai/v1")
+
+
 def chat_json(system_prompt: str, user_content: str) -> dict:
     """JSON-mode completion. The caller is responsible for the exact JSON
     shape via the system prompt."""
-    if active_provider() == "gemini":
+    provider = chat_provider()
+    if provider == "gemini":
         from google.genai import types
 
         response = _gemini_client().models.generate_content(
@@ -52,8 +75,13 @@ def chat_json(system_prompt: str, user_content: str) -> dict:
             ),
         )
         return json.loads(response.text)
-    response = _openai_client().chat.completions.create(
-        model=settings.openai_chat_model,
+    client, model = (
+        (_groq_client(), settings.groq_chat_model)
+        if provider == "groq"
+        else (_openai_client(), settings.openai_chat_model)
+    )
+    response = client.chat.completions.create(
+        model=model,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
@@ -65,7 +93,8 @@ def chat_json(system_prompt: str, user_content: str) -> dict:
 
 def chat(system_prompt: str, messages: list[dict]) -> str:
     """Free-form completion for multi-turn conversation (tutor)."""
-    if active_provider() == "gemini":
+    provider = chat_provider()
+    if provider == "gemini":
         from google.genai import types
 
         contents = [
@@ -81,9 +110,13 @@ def chat(system_prompt: str, messages: list[dict]) -> str:
             config=types.GenerateContentConfig(system_instruction=system_prompt),
         )
         return response.text
-    client = _openai_client()
+    client, model = (
+        (_groq_client(), settings.groq_chat_model)
+        if provider == "groq"
+        else (_openai_client(), settings.openai_chat_model)
+    )
     completion = client.chat.completions.create(
-        model=settings.openai_chat_model,
+        model=model,
         messages=[{"role": "system", "content": system_prompt}, *messages],
     )
     return completion.choices[0].message.content
@@ -109,9 +142,11 @@ def embed_text(text: str) -> list[float]:
 
 def transcribe_audio(content: bytes, filename: str) -> str:
     """Speech-to-text for audio/video resources. Gemini accepts raw audio
-    inline; OpenAI uses its Whisper transcription endpoint."""
+    inline; Groq and OpenAI both use a Whisper-compatible transcription
+    endpoint."""
     mime = _mime_for(filename)
-    if active_provider() == "gemini":
+    provider = chat_provider()
+    if provider == "gemini":
         from google.genai import types
 
         response = _gemini_client().models.generate_content(
@@ -126,9 +161,12 @@ def transcribe_audio(content: bytes, filename: str) -> str:
 
     buffer = io.BytesIO(content)
     buffer.name = filename
-    transcript = _openai_client().audio.transcriptions.create(
-        model=settings.openai_transcription_model, file=buffer
+    client, model = (
+        (_groq_client(), settings.groq_transcription_model)
+        if provider == "groq"
+        else (_openai_client(), settings.openai_transcription_model)
     )
+    transcript = client.audio.transcriptions.create(model=model, file=buffer)
     return transcript.text
 
 
@@ -187,4 +225,4 @@ def _mime_for(filename: str) -> str:
 
 @lru_cache
 def provider_label() -> str:
-    return active_provider() or "none"
+    return chat_provider() or "none"

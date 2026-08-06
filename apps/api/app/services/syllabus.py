@@ -21,7 +21,7 @@ lessons the way they should be studied."""
 
 
 def generate_course_outline(course_name: str, raw_text: str | None) -> dict:
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return _placeholder_outline(course_name)
 
     user_content = raw_text or f"Generate a standard syllabus outline for: {course_name}"

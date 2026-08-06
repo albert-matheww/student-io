@@ -1,10 +1,12 @@
 import re
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
+from fastapi import APIRouter, Depends, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.core.limiter import limiter
+from app.core.queue import get_queue
 from app.models import Course, Lesson, Module, Resource, ResourceStatus, ResourceType, User
 from app.schemas import CourseDetailOut, OnboardingProfileIn, ResourceOut, SyllabusImportIn, UserOut
 from app.services.pipeline import process_resource
@@ -57,7 +59,9 @@ def save_profile(
 
 
 @router.post("/syllabus", response_model=CourseDetailOut)
+@limiter.limit("10/hour")
 def import_syllabus(
+    request: Request,
     payload: SyllabusImportIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -113,16 +117,18 @@ def import_syllabus(
 
 
 @router.post("/courses/{course_id}/resources", response_model=ResourceOut)
+@limiter.limit("20/hour")
 async def upload_resource(
+    request: Request,
     course_id: str,
     file: UploadFile,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Uploads a learning resource and hands it to the AI processing
-    pipeline (OCR → speech-to-text → chunking → embeddings) as a background
-    task, so the upload responds immediately while processing continues."""
+    pipeline (OCR → speech-to-text → chunking → embeddings) via the RQ job
+    queue, so the upload responds immediately and processing runs on a
+    separate worker rather than contending with other users' requests."""
     content = await file.read()
     ext = (file.filename or "").rsplit(".", 1)[-1].lower()
     resource_type = _EXT_TO_TYPE.get(ext, ResourceType.txt)
@@ -139,7 +145,7 @@ async def upload_resource(
     db.commit()
     db.refresh(resource)
 
-    background_tasks.add_task(process_resource, resource.id)
+    get_queue().enqueue(process_resource, resource.id)
     return resource
 
 

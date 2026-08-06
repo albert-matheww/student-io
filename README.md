@@ -70,6 +70,19 @@ alembic upgrade head    # create/update the schema (Alembic owns it — no creat
 uvicorn app.main:app --reload --port 8000
 ```
 
+Resource processing (OCR/transcription/embeddings) runs on a separate RQ worker, not
+in the API process — run it alongside the server:
+
+```bash
+python worker.py
+```
+
+**Not yet deployed to Railway** — locally this is two processes; in production it
+needs a second Railway service running `python worker.py` against the same Redis, so
+uploads don't block/contend with the API's request handling. Wiring that up costs
+nothing extra in software (RQ is free, reuses the existing Redis) but is a new
+always-on process, worth doing deliberately rather than as a side effect of a deploy.
+
 ### 3. Frontend
 
 ```bash
@@ -93,16 +106,55 @@ To make it real, add these to `apps/api/.env` / `apps/web/.env.local`:
 | Variable | Where to get it | Unlocks |
 |---|---|---|
 | `GEMINI_API_KEY` | aistudio.google.com/apikey | Real syllabus parsing, lesson notes, flashcards, quizzes, AI tutor answers, OCR, transcription, embeddings (free tier; recommended) |
-| `OPENAI_API_KEY` | platform.openai.com/api-keys | Same features, used only when `GEMINI_API_KEY` is unset |
+| `GROQ_API_KEY` | console.groq.com/keys | Free fallback for chat + transcription when `GEMINI_API_KEY` is unset or its quota is exhausted (no embeddings/vision — Groq doesn't serve those) |
+| `OPENAI_API_KEY` | platform.openai.com/api-keys | Same features as Gemini, paid, last-resort fallback when neither of the above is set |
 | `CLERK_ISSUER` / `CLERK_SECRET_KEY` (api)<br>`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (web) | dashboard.clerk.com | Real Google/Apple/Microsoft sign-in, session-protected routes |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | app.supabase.com | Uploaded files go to cloud storage instead of `apps/api/uploads/` |
 | `YOUTUBE_API_KEY` | console.cloud.google.com | Video recommendations on lesson pages |
+| `SENTRY_DSN` (api) / `NEXT_PUBLIC_SENTRY_DSN` (web) | sentry.io (free tier) | Error monitoring — both apps run fine without it, just unmonitored |
+
+Course generation, resource uploads, lesson-content generation, and the AI tutor are
+all rate-limited per user (`slowapi`, backed by the same Redis as the job queue) so one
+user can't exhaust the shared free-tier AI quota for everyone else.
 
 **Pushing them to the deployed API (Railway):** fill `apps/api/.env`, then run
 `./scripts/push-api-keys.sh` from the repo root. It upserts every non-empty key above
 onto the Railway `api` service (values go through stdin, so they never hit shell
 history). Non-secret model/bucket settings are pushed too. The web-side Clerk key goes
 to Vercel's env vars for `student-io`, not Railway.
+
+## Testing
+
+```bash
+cd apps/api && source .venv/bin/activate && python3 -m pytest tests/ -v
+```
+
+Covers the auth dependency's contract (a request without a valid session token must be
+rejected once Clerk is configured — the exact gap that broke production), per-user data
+isolation, the AI provider fallback priority, and the rate-limiter's key function. Each
+test runs inside a SAVEPOINT against the real dev Postgres and rolls back on exit, so
+nothing persists.
+
+```bash
+cd apps/web && npx playwright install chromium   # once
+npm run test:e2e
+```
+
+One real end-to-end test: sign up through Clerk (using its `+clerk_test@` fixed-OTP
+convention, no real email needed) → save the onboarding profile → confirm no error and
+the flow advances. This is a genuine regression test for the auth-token bug — it failed
+against the code as it stood before that fix. It also caught a second, unrelated bug
+while being written: `/sign-up` and `/sign-in` weren't catch-all routes, so Clerk's
+email-verification step silently failed for a browser with no prior Clerk session (i.e.
+every real new visitor) — fixed by setting `routing="hash"` on both components. Needs
+`CLERK_SECRET_KEY` in `apps/web/.env.local` (already required for sign-in itself) — the
+suite uses Clerk's official `@clerk/testing` SDK to request a sanctioned testing token
+via the Backend API, which tells Clerk's Frontend API to skip the Cloudflare Turnstile
+bot-protection challenge for that test session. It does not defeat Turnstile itself —
+without a testing token, headless Playwright gets a real challenge, same as any other
+bot would, since that protection is working as intended. Each run deletes the Clerk
+test user it created in `afterEach`; the corresponding Postgres row is not cleaned up
+(a fresh/CI database wouldn't accumulate it anyway).
 
 ## Project structure
 
@@ -154,10 +206,19 @@ Known follow-ups from this deploy:
   `X-Dev-User-Id` fallback header, so every authenticated request 401'd in production
   while the UI showed a stale "check localhost:8000" toast. Fixed by attaching
   `window.Clerk.session.getToken()` as a Bearer token when Clerk is loaded.
+- **Clerk is still a Development instance** (`pk_test_`/`sk_test_` keys, visible via the
+  "Development mode" badge and generic "My Application" branding on the auth pages).
+  Clerk's free plan covers Production instances too (up to 50,000 monthly users, no
+  cost) — switching just needs a Production instance created in the Clerk dashboard, a
+  domain verified there, and the `pk_live_`/`sk_live_` keys swapped into Vercel/Railway.
+  Not done yet since it's a dashboard + DNS change to live auth.
+- **The RQ worker isn't deployed.** `python worker.py` needs to run as a second, always-on
+  Railway service against the same Redis — see Getting Started above. Not done yet since
+  it's a new billable-usage process on Railway, worth a deliberate decision.
 
 ## Not yet built
 
 A richer multi-node knowledge graph (today it's prerequisite chain + same-module
-"related concepts," not a full DAG with confused-concept clustering), and a real job
-queue for the AI pipeline (currently a FastAPI background task, fine for demo load)
-are the natural next steps beyond this.
+"related concepts," not a full DAG with confused-concept clustering) is the natural
+next step beyond this. The job queue exists (RQ, see Deployment) but its worker isn't
+deployed to Railway yet.

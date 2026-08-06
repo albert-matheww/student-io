@@ -124,7 +124,7 @@ def _transcribe_image(content: bytes, filename: str) -> str:
 
 
 def _transcribe_audio(content: bytes, filename: str) -> str:
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return ""
     return ai.transcribe_audio(content, filename)
 

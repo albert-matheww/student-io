@@ -34,7 +34,7 @@ _QUIZ_SYSTEM_PROMPT = """Generate 5 quiz questions for this lesson, mixing types
 
 
 def generate_lesson_notes(lesson_title: str, course_name: str) -> dict:
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return _placeholder_notes(lesson_title)
     try:
         return ai.chat_json(
@@ -46,7 +46,7 @@ def generate_lesson_notes(lesson_title: str, course_name: str) -> dict:
 
 
 def generate_flashcards(lesson_title: str, course_name: str) -> list[dict]:
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return _placeholder_flashcards(lesson_title)
     try:
         result = ai.chat_json(
@@ -59,7 +59,7 @@ def generate_flashcards(lesson_title: str, course_name: str) -> list[dict]:
 
 
 def generate_quiz_questions(lesson_title: str, course_name: str) -> list[dict]:
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return _placeholder_quiz(lesson_title)
     try:
         result = ai.chat_json(
@@ -83,7 +83,7 @@ def answer_tutor_question(
     memory); `student_context` summarizes what the AI already knows about
     this student — weak topics, mastered topics, learning style — so answers
     adapt instead of repeating a generic explanation every time."""
-    if not ai.active_provider():
+    if not ai.chat_provider():
         return (
             f"I'd explain \"{lesson_title}\" simply, with an analogy and a worked example here — "
             "connect an AI provider key in apps/api/.env to enable live AI tutoring."
